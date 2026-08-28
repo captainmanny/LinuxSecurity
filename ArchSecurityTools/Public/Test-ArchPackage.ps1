@@ -71,15 +71,15 @@ function Test-ArchPackage {
     else {
         $null
       }
+  # DEFINING suspiciousPatterns
+  $suspiciousPatterns = @{
+    'Pipes download file into shell' = '(curl|wget)[^\n]*\|\s*(sh|bash)'
+    'Invokes sudo inside the build script' = '\bsudo\b'
+    }    
 
 # CHECK BEHAVIOR
   $behavior = if ($pkgbuild) {
-    $suspiciousPatterns = @{
-      'Pipes download file into shell' = '(curl|wget)[^\n]*\|\s*(sh|bash)'
-      'Invokes sudo inside the build script' = '\bsudo\b'
-      }    
-
-    $findings = foreach ($description in $suspiciousPatterns.Keys) {
+     $findings = foreach ($description in $suspiciousPatterns.Keys) {
         if ($pkgbuild -match $suspiciousPatterns[$description]){
             $description
           }
@@ -92,6 +92,44 @@ function Test-ArchPackage {
   else {
       $null
     }
+
+# INSTALL SCRIPT DETECTION 
+  
+  $installScriptName = if ($pkgbuild -match 'install\s*=\s*[''"]?([^\s''"]+)') { $Matches[1] }
+
+  $installScript = if ($installScriptName) {
+      Write-Verbose "Fetching install script '$installScriptName' for $Name"
+      Get-AurFile -Name $Name -FileName $installScriptName
+    }
+    else {
+        $null
+      }
+
+$installScriptInfo = [pscustomobject]@{
+        HasInstallScript = [bool]$installScriptName
+        FileName         = $installScriptName
+        Findings         = if ($installScript) {
+            @(foreach ($description in $suspiciousPatterns.Keys) {
+                if ($installScript -match $suspiciousPatterns[$description]) {
+                    $description
+                }
+            })
+        } else {
+            @()
+        }
+    }
+
+# GET RECOMMENDATIONS
+$params = @{
+    Source = $source
+    Reputation = $reputation
+    Integrity = $integrity
+    PkgbuildBehavior = $behavior
+    installScript = $installScriptInfo
+  }
+
+$recommendation = Get-PackageRecommendation @params
+
 # CREATING CUSTOM OBJECT 
 [PSCustomObject]@{
   Name = $Name
@@ -101,6 +139,8 @@ function Test-ArchPackage {
   Upstream = $upstream
   Integrity = $integrity
   PkgbuildBehavior = $behavior
+  InstallScript = $installScriptInfo
+  Recommendation = $recommendation
 }
 
 } 
