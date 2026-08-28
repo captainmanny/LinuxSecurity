@@ -72,6 +72,26 @@ function Test-ArchPackage {
         $null
       }
 
+# CHECK BEHAVIOR
+  $behavior = if ($pkgbuild) {
+    $suspiciousPatterns = @{
+      'Pipes download file into shell' = '(curl|wget)[^\n]*\|\s*(sh|bash)'
+      'Invokes sudo inside the build script' = '\bsudo\b'
+      }    
+
+    $findings = foreach ($description in $suspiciousPatterns.Keys) {
+        if ($pkgbuild -match $suspiciousPatterns[$description]){
+            $description
+          }
+      }
+
+      [PSCustomObject]@{
+        Findings = @($findings)
+      }
+  }
+  else {
+      $null
+    }
 # CREATING CUSTOM OBJECT 
 [PSCustomObject]@{
   Name = $Name
@@ -80,6 +100,7 @@ function Test-ArchPackage {
   Reputation = $reputation
   Upstream = $upstream
   Integrity = $integrity
+  PkgbuildBehavior = $behavior
 }
 
 } 
